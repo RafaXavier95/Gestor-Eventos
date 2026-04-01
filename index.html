@@ -282,14 +282,13 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const { jsPDF } = window.jspdf;
 
 let state = { user: null, events: [], selectedEvent: null, suppliers: [], filter: 'all' };
+let authMode = 'login';
 let editingEventId = null;
-
 const catLabels = { alimentacao:'Alimentação', som:'Som / AV', decoracao:'Decoração', seguranca:'Segurança', limpeza:'Limpeza', transporte:'Transporte', foto:'Foto / Vídeo', outros:'Outros' };
 const catColors = { alimentacao:'badge-teal', som:'badge-blue', decoracao:'badge-purple', seguranca:'badge-coral', limpeza:'badge-blue', transporte:'badge-amber', foto:'badge-purple', outros:'badge-gray' };
 const dotColors = { alimentacao:'#1D9E75', som:'#378ADD', decoracao:'#7F77DD', seguranca:'#D85A30', limpeza:'#378ADD', transporte:'#BA7517', foto:'#7F77DD', outros:'#888780' };
 
 // AUTH
-let authMode = 'login';
 function toggleAuthMode() {
   authMode = authMode === 'login' ? 'signup' : 'login';
   document.getElementById('auth-subtitle').textContent = authMode === 'login' ? 'Entre na sua conta' : 'Crie sua conta';
