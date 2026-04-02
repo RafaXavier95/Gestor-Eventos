@@ -532,7 +532,7 @@ function calcTime(rowId) {
   var sm = parseInt(s.split(':')[0])*60 + parseInt(s.split(':')[1]);
   var em = parseInt(e.split(':')[0])*60 + parseInt(e.split(':')[1]);
   var diff = em - sm;
-  if (diff <= 0) { el.textContent = 'Inválido'; return; }
+  if (diff <= 0) diff += 24*60; // passa da meia-noite
   var h = Math.floor(diff/60), m = diff%60;
   el.textContent = h+'h'+(m>0?m+'min':'');
 }
@@ -1087,4 +1087,90 @@ sb.auth.onAuthStateChange(function(ev, session){
 });
 </script>
 </body>
-</html>
+</html>// ─── CALENDAR ────────────────────────────────────────
+function renderCalendar() {
+  var el = document.getElementById('calendar-content');
+  if (!S.selected) { el.innerHTML='<div class="card"><div class="empty">Selecione um evento primeiro.</div></div>'; return; }
+  if (!S.schedules.length) { el.innerHTML='<div class="card"><div class="empty">Nenhum fornecedor agendado neste evento ainda.</div></div>'; return; }
+
+  // group by date
+  var dates = {};
+  S.schedules.forEach(function(s) {
+    if (!s.service_date) return;
+    if (!dates[s.service_date]) dates[s.service_date] = [];
+    dates[s.service_date].push(s);
+  });
+
+  var dateKeys = Object.keys(dates).sort();
+  if (!dateKeys.length) { el.innerHTML='<div class="card"><div class="empty">Nenhum horário definido ainda. Crie um evento com fornecedores e horários.</div></div>'; return; }
+
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">' +
+    '<div style="font-size:18px;font-weight:500">'+S.selected.name+'</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-teal btn-sm" onclick="exportPDF()">Exportar PDF</button>' +
+      '<button class="btn btn-sm" onclick="shareWhatsApp()">WhatsApp</button>' +
+    '</div></div>';
+
+  dateKeys.forEach(function(dateKey) {
+    var dayScheds = dates[dateKey];
+    var dateLabel = new Date(dateKey+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+
+    // find hour range
+    var minH = 24, maxH = 0;
+    dayScheds.forEach(function(s) {
+      if (s.start_time) { var h = parseInt(s.start_time.split(':')[0]); if (h < minH) minH = h; }
+      if (s.end_time) {
+        var eh = parseInt(s.end_time.split(':')[0]);
+        var es = s.start_time ? parseInt(s.start_time.split(':')[0]) : 0;
+        // if end < start, crosses midnight
+        if (eh < es) eh += 24;
+        if (eh > maxH) maxH = eh;
+      }
+    });
+    if (minH === 24) minH = 6;
+    if (maxH === 0) maxH = 22;
+    maxH = Math.min(maxH + 1, 30); // cap at 6am next day
+
+    html += '<div class="card"><div style="font-weight:500;font-size:14px;margin-bottom:12px;text-transform:capitalize">'+dateLabel+'</div>';
+    html += '<div style="overflow-x:auto"><div style="min-width:400px">';
+
+    for (var h = minH; h <= maxH; h++) {
+      var displayH = h >= 24 ? (h - 24) : h;
+      var hourLabel = displayH+'h';
+      html += '<div style="display:flex;gap:4px;min-height:40px;border-top:0.5px solid var(--border);align-items:stretch">';
+      html += '<div style="width:44px;flex-shrink:0;font-size:11px;color:var(--text3);padding-top:4px;text-align:right;padding-right:8px">'+hourLabel+'</div>';
+      html += '<div style="flex:1;position:relative;min-height:40px">';
+
+      dayScheds.forEach(function(s) {
+        if (!s.start_time || !s.end_time) return;
+        var sh = parseInt(s.start_time.split(':')[0]);
+        var sm2 = parseInt(s.start_time.split(':')[1]);
+        var eh = parseInt(s.end_time.split(':')[0]);
+        var em2 = parseInt(s.end_time.split(':')[1]);
+        // handle midnight crossing
+        if (eh < sh) eh += 24;
+        if (sh !== h) return;
+        var startPct = (sm2/60)*100;
+        var totalMins = (eh*60+em2) - (sh*60+sm2);
+        var widthPct = Math.min((totalMins/60)*100, 100 - startPct);
+        var sType = (s.suppliers && s.suppliers.service_type) || s.service_type || 'Outros';
+        var colors = SERVICE_COLORS[sType] || SERVICE_COLORS['Outros'];
+        var sName = (s.suppliers && s.suppliers.company_name) || sType;
+        html += '<div style="position:absolute;left:'+startPct+'%;width:'+widthPct+'%;top:4px;height:28px;background:'+colors[0]+';color:'+colors[1]+';border-radius:4px;font-size:10px;font-weight:500;padding:2px 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-left:3px solid '+colors[1]+'" title="'+sName+' | '+fmt(s.start_time)+' – '+fmt(s.end_time)+'">'+sName+'</div>';
+      });
+
+      html += '</div></div>';
+    }
+
+    html += '</div></div>';
+
+    // legend
+    var types = {};
+    dayScheds.forEach(function(s){ var t=(s.suppliers&&s.suppliers.service_type)||s.service_type||'Outros'; types[t]=SERVICE_COLORS[t]||SERVICE_COLORS['Outros']; });
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+    Object.keys(types).forEach(function(t){ html += '<span style="display:flex;align-items:center;gap:4px;font-size:12px"><span style="width:10px;height:10px;border-radius:2px;background:'+types[t][0]+';border:2px solid '+types[t][1]+';display:inline-block"></span>'+t+'</span>'; });
+    html += '</div></div>';
+  });
+
+  el.innerHTML = html;
+}
